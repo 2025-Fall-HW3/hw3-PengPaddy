@@ -51,7 +51,7 @@ class MyPortfolio:
     NOTE: You can modify the initialization function
     """
 
-    def __init__(self, price, exclude, lookback=50, gamma=0):
+    def __init__(self, price, exclude, lookback=120, gamma=0):
         self.price = price
         self.returns = price.pct_change().fillna(0)
         self.exclude = exclude
@@ -70,7 +70,44 @@ class MyPortfolio:
         """
         TODO: Complete Task 4 Below
         """
-        
+        for i in range(0, self.lookback + 1):
+            n_assets = len(assets)
+            equal_weight = 1.0 / n_assets
+            date = self.price.index[i]
+
+            for asset in assets:
+                self.portfolio_weights.loc[date, asset] = equal_weight
+        for i in range(self.lookback + 1, len(self.price)):
+            # 1. 計算 lookback 期間報酬（Momentum）
+            past_ret = (
+                self.price[assets].iloc[i-1] /
+                self.price[assets].iloc[i - self.lookback - 1]
+                - 1
+            )
+
+            # 2. 計算 volatility（標準差）
+            vol = self.returns[assets].iloc[i - self.lookback : i].std()
+
+            # 3. 把負 momentum 的剔除（long-only strong momentum）
+            mom = past_ret.clip(lower=0)
+
+            # 4. 避免 division by zero
+            vol = vol.replace(0, np.nan)
+
+            # 5. 計算 risk-adjusted momentum 權重
+            score = mom / vol
+            score = score.replace([np.inf, -np.inf], np.nan)
+
+            # 若全為 0，則保持上次權重
+            if score.sum() == 0 or score.isna().all():
+                self.portfolio_weights.loc[self.price.index[i], assets] = \
+                    self.portfolio_weights.loc[self.price.index[i-1], assets]
+                continue
+
+            w = score / score.sum()
+
+            # 6. 存入權重
+            self.portfolio_weights.loc[self.price.index[i], assets] = w.values
         
         """
         TODO: Complete Task 4 Above
